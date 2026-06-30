@@ -1,0 +1,59 @@
+# =============================================================================
+# HBase Table Creation — E-Commerce Analytics
+# Run inside the HBase shell:
+#   docker exec -it hbase-project hbase shell
+#   then copy and paste the commands below
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# Table 1: sessions
+# Stores time-series user browsing activity.
+#
+# Row key design: user_id#reverse_timestamp
+#   - Prefixing with user_id groups all sessions for one user together,
+#     enabling fast prefix scans to retrieve a user's full session history.
+#   - Reverse timestamp (9999999999999 - epoch_ms) ensures the most recent
+#     session appears first when scanning — no sort step needed.
+#
+# Column families:
+#   info     — core session metadata (id, duration, conversion status, referrer)
+#   device   — device and browser information
+#   geo      — geographic location of the session
+#   activity — what the user did (products viewed, pages visited)
+# -----------------------------------------------------------------------------
+
+create 'sessions',
+  { NAME => 'info',     VERSIONS => 1, COMPRESSION => 'SNAPPY' },
+  { NAME => 'device',   VERSIONS => 1, COMPRESSION => 'SNAPPY' },
+  { NAME => 'geo',      VERSIONS => 1, COMPRESSION => 'SNAPPY' },
+  { NAME => 'activity', VERSIONS => 1, COMPRESSION => 'SNAPPY' }
+
+
+# -----------------------------------------------------------------------------
+# Table 2: product_performance
+# Stores product view counts aggregated by day.
+#
+# Row key design: product_id#date (e.g. prod_00950#2025-03-12)
+#   - Prefixing with product_id groups all daily metrics for one product
+#     together, enabling fast prefix scans to retrieve a product's full
+#     performance history across all dates.
+#   - Appending the date (ascending) means a scan naturally returns metrics
+#     in chronological order — ideal for time-series trend analysis.
+#
+# Column family:
+#   metrics — quantitative performance indicators per product per day
+#     - metrics:view_count — number of times the product was viewed on this date
+#
+# Designed for extension: purchase_count and cart_add_count can be added
+# as additional qualifiers under metrics without any schema migration.
+# -----------------------------------------------------------------------------
+
+create 'product_performance',
+  { NAME => 'metrics', VERSIONS => 1, COMPRESSION => 'SNAPPY' }
+
+
+# Verify both tables were created correctly
+list
+describe 'sessions'
+describe 'product_performance'
