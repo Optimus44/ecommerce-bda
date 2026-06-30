@@ -1,0 +1,95 @@
+# =============================================================================
+# HBase Sample Queries — E-Commerce Analytics
+# Run inside the HBase shell:
+#   docker exec -it hbase-project hbase shell
+#   then copy and paste the commands below
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# 1. Verify data was loaded
+# -----------------------------------------------------------------------------
+
+# Count total rows in the sessions table
+count 'sessions'
+
+# Peek at the first 3 rows to confirm structure
+scan 'sessions', { LIMIT => 3 }
+
+
+# -----------------------------------------------------------------------------
+# 2. Retrieve all sessions for a specific user
+#
+# How it works:
+#   STARTROW is the user prefix — HBase's sorted row keys mean all sessions
+#   for this user sit together in contiguous rows.
+#   STOPROW uses '$' (ASCII 36, just above '#' ASCII 35) to cap the scan
+#   at the end of this user's key range without spilling into the next user.
+#
+# This is the primary query pattern HBase was designed for — a fast
+# prefix scan that never touches rows belonging to other users.
+# -----------------------------------------------------------------------------
+
+scan 'sessions', {
+  STARTROW => 'user_000042#',
+  STOPROW  => 'user_000042$',
+  LIMIT    => 10
+}
+
+
+# -----------------------------------------------------------------------------
+# 3. Retrieve a single session row by its exact row key
+#
+# Use this when you know the full row key (user_id + reverse timestamp).
+# 'get' is faster than 'scan' for point lookups — it goes directly
+# to the row without scanning.
+# -----------------------------------------------------------------------------
+
+# Replace the row key below with an actual key from your loaded data
+# (copy one from the scan output above)
+get 'sessions', 'user_000042#9999836748196'
+
+
+# -----------------------------------------------------------------------------
+# 4. Retrieve only specific column families for a user's sessions
+#
+# Useful when you only need part of the data — e.g. device analytics
+# without loading geo or activity data into memory.
+# -----------------------------------------------------------------------------
+
+scan 'sessions', {
+  STARTROW => 'user_000042#',
+  STOPROW  => 'user_000042$',
+  COLUMNS  => ['info', 'device'],
+  LIMIT    => 5
+}
+
+
+# -----------------------------------------------------------------------------
+# 5. Retrieve only converted sessions for a specific user
+#
+# Filters on the conversion_status cell value within the info column family.
+# Note: this is a server-side filter applied after the prefix scan —
+# HBase still scans the user's rows, then filters. This is acceptable
+# for per-user queries (small row range) but would be expensive across
+# the full table. This illustrates why row key design is critical:
+# filtering on non-key fields is always secondary to the row key scan.
+# -----------------------------------------------------------------------------
+
+scan 'sessions', {
+  STARTROW => 'user_000042#',
+  STOPROW  => 'user_000042$',
+  FILTER   => "SingleColumnValueFilter('info', 'conversion_status',
+               =, 'binary:converted')"
+}
+
+
+# -----------------------------------------------------------------------------
+# 6. Scan sessions across all users — limited sample
+#
+# Returns the first 20 rows across the entire table.
+# In production this would be used sparingly — full table scans
+# are expensive at scale, which is why row key design matters.
+# -----------------------------------------------------------------------------
+
+scan 'sessions', { LIMIT => 20 }
