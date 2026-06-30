@@ -1,0 +1,15 @@
+version: "3.9"
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: mongo-ecommerce
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db          # persists DB data across restarts
+      - ./data:/data/import:ro       # source JSON files, read-only
+
+volumes:
+  mongo_data:
